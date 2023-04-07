@@ -94,7 +94,6 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 	def __str__(self):
 		return f"Id:\t{self.id}\nTitle:\t{self.title}\nTags:\t{self.tags}\n"
 
-
 	#Static method
 	def appearance_matrix(queries=allqueries, qinclude=set(), remove=set()):
 		"""
@@ -121,7 +120,7 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 		qs = [q for q in queries if qinclude.issubset(q.tags)]
 
 		for q in qs:
-			all_tags |= q.get_tags()
+			all_tags |= q.tags
 
 		#Remove unwanted tags
 		all_tags -= remove
@@ -135,7 +134,7 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 		for i in range(len(l)):
 			for j in range(i+1, len(l)): #Triangle
 				for q in qs:
-					if l[i] in q.get_tags() and l[j] in q.get_tags():
+					if l[i] in q.tags and l[j] in q.tags:
 						matrix[i][j] += 1
 				matrix[j][i] = matrix[i][j] #Complete matrix
 
@@ -244,11 +243,16 @@ if __name__ == "__main__":
 		except IOError:
 			pass
 			#print(f"ERROR: Couldn't process {filename} successfully")
-			
+
+	################ WRITE METADATAS ################
+	
 	for q in queries:
 		q.write_metadatas(f"./metadatas/{q.get_id()}.ttl")
 	
 	Query.write_allmetadatas("./allmetadatas.ttl")
+
+	##################### RECAP #####################
+
 	print(len(queries), "requêtes analysées")
 	max_tag_len = 0
 	for e in tags:
@@ -274,6 +278,7 @@ if __name__ == "__main__":
 	print("\nTags that aren't in tutorial queries:")
 	print(tags.keys() - ttags.keys(),end="\n\n")
 
+	################# HISTOGRAMS ####################
 
 	figure = plt.figure()
 	#Nb requete/tag
@@ -298,6 +303,8 @@ if __name__ == "__main__":
 
 	plt.show()
 
+	################## HEATMAP ######################
+
 	#TODO: CAH ? Group closer tags match
 	matrix, matrixtags = Query.appearance_matrix(qinclude={"tutorial"}, remove={"QC", "evidence", "tutorial"})
 	m = plt.matshow(matrix)
@@ -308,6 +315,8 @@ if __name__ == "__main__":
 	
 	plt.gcf().canvas.manager.set_window_title("Matrice d'apparition")
 	plt.show()
+
+	################### GRAPHS ######################
 
 	generate_gexf(queries)
 
