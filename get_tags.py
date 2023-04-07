@@ -1,14 +1,14 @@
 import matplotlib.pyplot as plt
 import networkx as nx
-
+import seaborn
 class Query:
 	allqueries = []
 	alltags = set()
 
-	def __init__(self, id=None, title=None, tags=set()):
+	def __init__(self, id=None, title="unknown", tags=set()):
 		self.id = id
 		self.comments = []
-		self.title = title
+		self.set_title(title)
 		self.tags = set(tags)
 		Query.alltags |= tags
 		Query.allqueries.append(self)
@@ -18,6 +18,7 @@ class Query:
 		
 	def add_tags(self, tags):
 		self.tags |= set(tags)
+		Query.alltags |= set(tags)
 
 	def get_id(self):
 		return self.id
@@ -32,7 +33,7 @@ class Query:
 		self.id = id
 	
 	def set_title(self, title):
-		self.title = title
+		self.title = title.replace('"', "'")
 	
 	def write_metadatas(self, output_filename):
 		try:
@@ -73,7 +74,7 @@ PREFIX dct: <http://purl.org/dc/terms/>
 PREFIX nextprot: <http://nextprot.org/rdf#>
 PREFIX : <http://nextprot.org/query/>\n\n""")
 
-				for t in Query.alltags:
+				for t in sorted(Query.alltags):
 					f.write(f":{t} rdf:type :Tag .\n")
 					f.write(f":{t} rdfs:label \"{t.replace('_', ' ')}\" .\n")
 
@@ -305,15 +306,29 @@ if __name__ == "__main__":
 
 	################## HEATMAP ######################
 
-	#TODO: CAH ? Group closer tags match
+	#TODO: Hierarchical clustering from appearance 
+	#TODO: Could normalize by dividing by self appearance in queries
 	matrix, matrixtags = Query.appearance_matrix(qinclude={"tutorial"}, remove={"QC", "evidence", "tutorial"})
+
 	m = plt.matshow(matrix)
-	m.axes.set_xticklabels(matrixtags)
+	m.axes.set_xticklabels(matrixtags, rotation = 90)
 	m.axes.set_yticklabels(matrixtags)
 	m.axes.set_xticks(range(len(matrixtags)))
 	m.axes.set_yticks(range(len(matrixtags)))
-	
 	plt.gcf().canvas.manager.set_window_title("Matrice d'apparition")
+	plt.show()
+	
+	from math import log
+	#Logarithm approach to minimize high values (+1 for avoiding domain errors)
+	logmatrix = [list(map(lambda i: log(i + 1), l)) for l in matrix]
+
+	logm = plt.matshow(logmatrix)
+	logm.axes.set_xticklabels(matrixtags, rotation = 90)
+	logm.axes.set_yticklabels(matrixtags)
+	logm.axes.set_xticks(range(len(matrixtags)))
+	logm.axes.set_yticks(range(len(matrixtags)))
+
+	plt.gcf().canvas.manager.set_window_title("Matrice d'apparition (log(x))")
 	plt.show()
 
 	################### GRAPHS ######################
