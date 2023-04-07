@@ -96,10 +96,23 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 		return f"Id:\t{self.id}\nTitle:\t{self.title}\nTags:\t{self.tags}\n"
 
 	#Static methods
-	def filter_queries(queries=allqueries, qinclude=set(), qexclude=set()):
-		return [q for q in queries if qinclude.issubset(q.tags) and len(qexclude & q.tags) == 0]
+	def filter_queries(queries=allqueries, include=set(), exclude=set()):
+		"""
+		Parameters
+		----------
+		include : default = set()
+			Select only queries which their tags is a superset of those in <include> set
+
+		exclude : default = set()
+			Select only queries which their tags aren't in <exclude> set
+
+		Return
+		------
+			Filtered list of queries (must include all tags of <include> and none of tags from <exclude>)
+		"""
+		return [q for q in queries if include.issubset(q.tags) and len(exclude & q.tags) == 0]
 	
-	def appearance_matrix(queries=allqueries, qinclude=set(), qexclude=set(), remove=set()):
+	def appearance_matrix(queries=allqueries, remove=set()):
 		"""
 		Parameters
 		----------
@@ -107,26 +120,17 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 			<allqueries> are all Query that has been initialized
 			Calculate appearance using a list of queries
 
-		qinclude : default = set()
-			Select only queries which their tags is a superset of those in qinclude set
-
-		qexclude : default = set()
-			Select only queries which their tags aren't in qexclude set
-
 		remove : default = set()
 			Remove from result a set of tags
 
 		Return
 		------
-
 		[0] Matrix of appearance
 		[1] List, tag order
-		[2] Dict, tag index in [1]
 		"""
 		all_tags = set()
-		qs = Query.filter_queries(queries, qinclude, qexclude)
-
-		for q in qs:
+		
+		for q in queries:
 			all_tags |= q.tags
 
 		#Remove unwanted tags
@@ -139,7 +143,7 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 		matrix = [[0]*len(all_tags) for _ in range(len(all_tags))]
 
 		indices = {l[i]:i for i in range(len(l))}
-		for q in qs:
+		for q in queries:
 			lt = list(q.tags)
 			for i in range(len(lt)):
 				for j in range(i+1, len(lt)):
@@ -161,7 +165,7 @@ def drawgraphs(Gs):
 def generate_gexf(queries):
 	#Graph1: 
 	# Sommet { Tag, Query } 
-	# Edge   {Query -- Tag}
+	# Edge   {Query -> Tag}
 	g1 = nx.DiGraph()
 	g1.add_nodes_from([q.get_id() for q in queries])
 	g1.add_nodes_from(tags.keys())
@@ -177,7 +181,7 @@ def generate_gexf(queries):
 	#Graph2:
 	# Sommet { Tag }
 	# Edge   { Tag -- Tag } (at least a query using both) [weight=the number of queries using both]
-	matrix, matrixtags = Query.appearance_matrix(qinclude={"tutorial"}, remove={"QC", "tutorial"})
+	matrix, matrixtags = Query.appearance_matrix()
 
 	g2 = nx.Graph()
 	g2.add_nodes_from(tags.keys())
@@ -317,7 +321,8 @@ if __name__ == "__main__":
 	#TODO: Hierarchical clustering from appearance 
 	#TODO: Could normalize by dividing by self appearance in queries ( X /= tags["tag1"] * tags["tag2"] )
 
-	matrix, matrixtags = Query.appearance_matrix(qinclude={"tutorial"}, remove={"QC", "evidence", "tutorial"})
+	#TODO: Check Tutorial, QC, ...
+	matrix, matrixtags = Query.appearance_matrix()
 
 	m = plt.matshow(matrix)
 	m.axes.set_xticklabels(matrixtags, rotation = 90)
