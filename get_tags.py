@@ -95,8 +95,11 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 	def __str__(self):
 		return f"Id:\t{self.id}\nTitle:\t{self.title}\nTags:\t{self.tags}\n"
 
-	#Static method
-	def appearance_matrix(queries=allqueries, qinclude=set(), remove=set()):
+	#Static methods
+	def filter_queries(queries=allqueries, qinclude=set(), qexclude=set()):
+		return [q for q in queries if qinclude.issubset(q.tags) and len(qexclude & q.tags) == 0]
+	
+	def appearance_matrix(queries=allqueries, qinclude=set(), qexclude=set(), remove=set()):
 		"""
 		Parameters
 		----------
@@ -105,7 +108,10 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 			Calculate appearance using a list of queries
 
 		qinclude : default = set()
-			Select only queries which their tags is a superset of those in qinclude
+			Select only queries which their tags is a superset of those in qinclude set
+
+		qexclude : default = set()
+			Select only queries which their tags aren't in qexclude set
 
 		remove : default = set()
 			Remove from result a set of tags
@@ -118,7 +124,7 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 		[2] Dict, tag index in [1]
 		"""
 		all_tags = set()
-		qs = [q for q in queries if qinclude.issubset(q.tags)]
+		qs = Query.filter_queries(queries, qinclude, qexclude)
 
 		for q in qs:
 			all_tags |= q.tags
@@ -132,12 +138,14 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 		#Zero square matrix of size n, n = set cardinality
 		matrix = [[0]*len(all_tags) for _ in range(len(all_tags))]
 
-		for i in range(len(l)):
-			for j in range(i+1, len(l)): #Triangle
-				for q in qs:
-					if l[i] in q.tags and l[j] in q.tags:
-						matrix[i][j] += 1
-				matrix[j][i] = matrix[i][j] #Complete matrix
+		indices = {l[i]:i for i in range(len(l))}
+		for q in qs:
+			lt = list(q.tags)
+			for i in range(len(lt)):
+				for j in range(i+1, len(lt)):
+					if lt[i] in indices and lt[j] in indices:
+						matrix[indices[lt[i]]][indices[lt[j]]] += 1
+						matrix[indices[lt[j]]][indices[lt[i]]] += 1
 
 		return matrix, l
 	
@@ -154,7 +162,7 @@ def generate_gexf(queries):
 	#Graph1: 
 	# Sommet { Tag, Query } 
 	# Edge   {Query -- Tag}
-	g1 = nx.Graph()
+	g1 = nx.DiGraph()
 	g1.add_nodes_from([q.get_id() for q in queries])
 	g1.add_nodes_from(tags.keys())
 
@@ -169,7 +177,7 @@ def generate_gexf(queries):
 	#Graph2:
 	# Sommet { Tag }
 	# Edge   { Tag -- Tag } (at least a query using both) [weight=the number of queries using both]
-	matrix, matrixtags = Query.appearance_matrix()
+	matrix, matrixtags = Query.appearance_matrix(qinclude={"tutorial"}, remove={"QC", "tutorial"})
 
 	g2 = nx.Graph()
 	g2.add_nodes_from(tags.keys())
