@@ -10,7 +10,7 @@ class Query:
 		self.comments = []
 		self.set_title(title)
 		self.tags = set(tags)
-		Query.alltags |= tags
+		Query.alltags |= set(tags)
 		Query.allqueries.append(self)
 
 	def add_comment(self, comment):
@@ -307,7 +307,8 @@ if __name__ == "__main__":
 	################## HEATMAP ######################
 
 	#TODO: Hierarchical clustering from appearance 
-	#TODO: Could normalize by dividing by self appearance in queries
+	#TODO: Could normalize by dividing by self appearance in queries ( X /= tags["tag1"] * tags["tag2"] )
+
 	matrix, matrixtags = Query.appearance_matrix(qinclude={"tutorial"}, remove={"QC", "evidence", "tutorial"})
 
 	m = plt.matshow(matrix)
