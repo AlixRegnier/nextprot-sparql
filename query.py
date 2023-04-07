@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import networkx as nx
-import seaborn
+
 class Query:
 	allqueries = []
 	alltags = set()
@@ -112,6 +112,12 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 		"""
 		return [q for q in queries if include.issubset(q.tags) and len(exclude & q.tags) == 0]
 	
+	def get_queries_tags(queries):
+		r = set()
+		for q in queries:
+			r |= q.tags
+		return r
+	
 	def appearance_matrix(queries=allqueries, remove=set()):
 		"""
 		Parameters
@@ -153,109 +159,37 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 
 		return matrix, l
 	
-def drawgraph(G):
-	drawgraphs([G])
 
-def drawgraphs(Gs):
-	for i in range(len(Gs)):
-		plt.subplot(221 + i)
-		nx.draw(Gs[i], with_labels=True, font_weight='bold')
-	plt.show()
+	def get_queries_from_directory(path=".",prefix="NXQ_", suffix=".rq", start=1, end=9703):
+		path = path.rstrip('/')
+		queries = []
+		tags = dict()
+		for i in range(1,9702+1):
+			filename = f"{path}/{prefix}{i:05}{suffix}"
 
-def generate_gexf(queries):
-	#Graph1: 
-	# Sommet { Tag, Query } 
-	# Edge   {Query -> Tag}
-	g1 = nx.DiGraph()
-	g1.add_nodes_from([q.get_id() for q in queries])
-	g1.add_nodes_from(tags.keys())
-
-	for q in queries:
-		for tag in q.get_tags():
-			g1.add_edge(q.get_id(), tag)
-
-	print("Generating g1.gexf...")
-	#drawgraph(g1)
-	nx.write_gexf(g1, "g1.gexf")
-
-	#Graph2:
-	# Sommet { Tag }
-	# Edge   { Tag -- Tag } (at least a query using both) [weight=the number of queries using both]
-	matrix, matrixtags = Query.appearance_matrix()
-
-	g2 = nx.Graph()
-	g2.add_nodes_from(tags.keys())
-	for i in range(len(matrixtags)):
-		for j in range(i+1, len(matrixtags)):
-			if matrix[i][j] > 0:
-				g2.add_edge(matrixtags[i], matrixtags[j], weight=matrix[i][j])
-
-	print("Generating g2.gexf...")
-	#drawgraph(g2)
-	nx.write_gexf(g2, "g2.gexf")
-	
-	#Graph3:
-	# Sommet { Query }
-	# Edge   { Query -- Query } (at least sharing a tag) [weight=the number of shared tags]
-	g3 = nx.Graph()
-	g3.add_nodes_from([q.get_id() for q in queries])
-	for i in range(len(queries)):
-		for j in range(i+1, len(queries)):
-			len_inter = len(queries[i].get_tags() & queries[j].get_tags()) #Intersection
-			if len_inter > 0:
-				g3.add_edge(queries[i].get_id(), queries[j].get_id(), weight=len_inter)
-	
-	print("Generating g3.gexf...")
-	#drawgraph(g3)
-	nx.write_gexf(g3, "g3.gexf")
+			try:
+				with open(filename, "r", encoding="utf-8") as f:
+					queries.append(Query())
+					for line in f:
+						if line[:4] == "#id:":
+							queries[-1].set_id(line[4:-1])
+						elif line[:7] == "#title:":
+							queries[-1].set_title(line[7:-1])
+						elif line[:9] == "#comment:":
+							queries[-1].add_comment(line[9:-1])
+						elif line[:6] == "#tags:":
+							s = set(map(lambda s : s.strip().replace(' ', '_'), line[6:-1].split(',')))
+							s.discard("")
+							queries[-1].add_tags(s)
+							break
+						elif line == '\n':
+							break
+			except IOError:
+				pass
+				#print(f"ERROR: Couldn't process {filename} successfully")
 
 if __name__ == "__main__":
-
-	#For all queries
-	queries = []
-	tags = dict()
-	#For queries tagged "tutorial"
-	ttags = dict()
-	tqueries = []
-	
-	for i in range(1,9702+1):
-		filename = f"./nextprot-queries/NXQ_{i:05}.rq"
-
-		try:
-			with open(filename, "r", encoding="utf-8") as f:
-				queries.append(Query())
-				for line in f:
-					if line[:4] == "#id:":
-						queries[-1].set_id(line[4:-1])
-					elif line[:7] == "#title:":
-						queries[-1].set_title(line[7:-1])
-					elif line[:9] == "#comment:":
-						queries[-1].add_comment(line[9:-1])
-					elif line[:6] == "#tags:":
-						s = set(map(lambda s : s.strip().replace(' ', '_'), line[6:-1].split(',')))
-						s.discard("")
-						
-						for e in s:
-							if e in tags:
-								tags[e] += 1
-							else:
-								tags[e] = 1
-								
-						if "tutorial" in s:
-							tqueries.append(queries[-1])
-							for e in s:
-								if e in ttags:
-									ttags[e] += 1
-								else:
-									ttags[e] = 1
-							
-						queries[-1].add_tags(s)
-						break
-					elif line == '\n':
-						break
-		except IOError:
-			pass
-			#print(f"ERROR: Couldn't process {filename} successfully")
+	queries = Query.get_queries_from_directory("./nextprot-queries")
 
 	################ WRITE METADATAS ################
 	
@@ -344,8 +278,4 @@ if __name__ == "__main__":
 
 	plt.gcf().canvas.manager.set_window_title("Matrice d'apparition (log(x))")
 	plt.show()
-
-	################### GRAPHS ######################
-
-	generate_gexf(queries)
 
