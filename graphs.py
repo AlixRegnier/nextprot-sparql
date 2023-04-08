@@ -35,7 +35,7 @@ def generate_gexf(queries):
 	matrix, matrixtags = Query.appearance_matrix()
 
 	g2 = nx.Graph()
-	g2.add_nodes_from(tags.keys())
+	g2.add_nodes_from(tags)
 	for i in range(len(matrixtags)):
 		for j in range(i+1, len(matrixtags)):
 			if matrix[i][j] > 0:

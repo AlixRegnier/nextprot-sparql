@@ -59,7 +59,7 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 					f.write(f":{t} rdfs:label \"{t.replace('_', ' ')}\" .\n")
 					f.write(f":{self.id} dct:subject :{t} .\n")
 		except IOError:
-			print("ERROR: Failed to write '{output_filename}'")
+			print(f"ERROR: Failed to write '{output_filename}'")
 
 	def write_allmetadatas(output_filename):
 		try:
@@ -117,6 +117,16 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 		for q in queries:
 			r |= q.tags
 		return r
+
+	def count_queries_tags(queries):
+		r = dict()
+		for q in queries:
+			for t in q.tags:
+				if t in r.keys():
+					r[t] += 1
+				else:
+					r[t] = 1
+		return r
 	
 	def appearance_matrix(queries=allqueries, remove=set()):
 		"""
@@ -160,11 +170,11 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 		return matrix, l
 	
 
-	def get_queries_from_directory(path=".",prefix="NXQ_", suffix=".rq", start=1, end=9703):
+	def get_queries_from_directory(path=".", prefix="NXQ_", suffix=".rq", start=1, end=9702):
 		path = path.rstrip('/')
 		queries = []
-		tags = dict()
-		for i in range(1,9702+1):
+
+		for i in range(start,end+1):
 			filename = f"{path}/{prefix}{i:05}{suffix}"
 
 			try:
@@ -187,12 +197,19 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 			except IOError:
 				pass
 				#print(f"ERROR: Couldn't process {filename} successfully")
+		return queries
 
 if __name__ == "__main__":
 	queries = Query.get_queries_from_directory("./nextprot-queries")
+	tqueries = Query.filter_queries(queries, include={"tutorial"})
 
+	tag_count = Query.count_queries_tags(queries)
+	ttag_count = Query.count_queries_tags(tqueries)
 	################ WRITE METADATAS ################
 	
+	import os
+
+	os.mkdir("./metadatas")
 	for q in queries:
 		q.write_metadatas(f"./metadatas/{q.get_id()}.ttl")
 	
@@ -202,35 +219,35 @@ if __name__ == "__main__":
 
 	print(len(queries), "requêtes analysées")
 	max_tag_len = 0
-	for e in tags:
+	for e in tag_count:
 		if len(e) > max_tag_len:
 			max_tag_len = len(e)
 	
 	max_ttag_len = 0
-	for e in ttags:
+	for e in ttag_count:
 		if len(e) > max_ttag_len:
 			max_ttag_len = len(e)
 	
 	#Count tags appearance
-	print("\n#NUMBER OF TAGS#".ljust(max_tag_len+1),":", len(tags))
-	for n, t in sorted(((v,k) for k,v in tags.items()), reverse=True):
+	print("\n#NUMBER OF TAGS#".ljust(max_tag_len+1),":", len(tag_count))
+	for n, t in sorted(((v,k) for k,v in tag_count.items()), reverse=True):
 		print(t.ljust(max_tag_len),":", n)
 	
 	#Count tags appearance in tutorial tags
-	print("\n#NUMBER OF TUTORIAL TAGS#".ljust(max_ttag_len+1),":", len(ttags)-1)
-	for n, t in sorted(((v,k) for k,v in ttags.items()), reverse=True):
+	print("\n#NUMBER OF TUTORIAL TAGS#".ljust(max_ttag_len+1),":", len(ttag_count)-1)
+	for n, t in sorted(((v,k) for k,v in ttag_count.items()), reverse=True):
 		if t != "tutorial":
 			print(t.ljust(max_ttag_len),":", n)
 
 	print("\nTags that aren't in tutorial queries:")
-	print(tags.keys() - ttags.keys(),end="\n\n")
+	print(tag_count.keys() - ttag_count.keys(), end="\n\n")
 
 	################# HISTOGRAMS ####################
 
 	figure = plt.figure()
 	#Nb requete/tag
 	a1 = figure.add_subplot(221)
-	a1.hist(tags.values())
+	a1.hist(tag_count.values())
 	a1.set_title("Nombre de requêtes par tag")
 
 	#Nb tag/requete
@@ -240,7 +257,7 @@ if __name__ == "__main__":
 
 	#Nb requete/tag (tutorial)
 	a3 = figure.add_subplot(223)
-	a3.hist(ttags.values())
+	a3.hist(ttag_count.values())
 	a3.set_title("Nombre de requêtes par tag (tutorial)")
 
 	#Nb tag/requete (tutorial)
@@ -276,6 +293,6 @@ if __name__ == "__main__":
 	logm.axes.set_xticks(range(len(matrixtags)))
 	logm.axes.set_yticks(range(len(matrixtags)))
 
-	plt.gcf().canvas.manager.set_window_title("Matrice d'apparition (log(x))")
+	plt.gcf().canvas.manager.set_window_title("Matrice d'apparition (log(x+1))")
 	plt.show()
 
