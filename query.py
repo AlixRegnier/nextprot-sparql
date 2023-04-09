@@ -1,24 +1,19 @@
 import matplotlib.pyplot as plt
-import networkx as nx
+from scipy.cluster.hierarchy import dendrogram, linkage
+from scipy.spatial.distance import squareform
 
 class Query:
-	allqueries = []
-	alltags = set()
-
 	def __init__(self, id=None, title="unknown", tags=set()):
 		self.id = id
 		self.comments = []
 		self.set_title(title)
 		self.tags = set(tags)
-		Query.alltags |= set(tags)
-		Query.allqueries.append(self)
 
 	def add_comment(self, comment):
 		self.comments.append(comment.replace('"', "'"))
 		
 	def add_tags(self, tags):
 		self.tags |= set(tags)
-		Query.alltags |= set(tags)
 
 	def get_id(self):
 		return self.id
@@ -61,7 +56,7 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 		except IOError:
 			print(f"ERROR: Failed to write '{output_filename}'")
 
-	def write_allmetadatas(output_filename):
+	def write_allmetadatas(queries, output_filename):
 		try:
 			with open(output_filename, "w", encoding="utf-8") as f:
 				f.write("""PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> 
@@ -74,11 +69,11 @@ PREFIX dct: <http://purl.org/dc/terms/>
 PREFIX nextprot: <http://nextprot.org/rdf#>
 PREFIX : <http://nextprot.org/query/>\n\n""")
 
-				for t in sorted(Query.alltags):
+				for t in sorted(Query.get_queries_tags(queries)):
 					f.write(f":{t} rdf:type :Tag .\n")
 					f.write(f":{t} rdfs:label \"{t.replace('_', ' ')}\" .\n")
 
-				for q in Query.allqueries:
+				for q in queries:
 					f.write(f":{q.id} rdf:type :Query .\n")
 					f.write(f":{q.id} rdfs:label \"{q.id}\" .\n")
 					f.write(f":{q.id} dct:creator <https://www.nextprot.org> .\n")
@@ -96,7 +91,7 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 		return f"Id:\t{self.id}\nTitle:\t{self.title}\nTags:\t{self.tags}\n"
 
 	#Static methods
-	def filter_queries(queries=allqueries, include=set(), exclude=set()):
+	def filter_queries(queries, include=set(), exclude=set()):
 		"""
 		Parameters
 		----------
@@ -128,7 +123,7 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 					r[t] = 1
 		return r
 	
-	def appearance_matrix(queries=allqueries, remove=set()):
+	def appearance_matrix(queries, remove=set()):
 		"""
 		Parameters
 		----------
@@ -181,14 +176,14 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 				with open(filename, "r", encoding="utf-8") as f:
 					queries.append(Query())
 					for line in f:
-						if line[:4] == "#id:":
-							queries[-1].set_id(line[4:-1])
-						elif line[:7] == "#title:":
-							queries[-1].set_title(line[7:-1])
-						elif line[:9] == "#comment:":
-							queries[-1].add_comment(line[9:-1])
-						elif line[:6] == "#tags:":
-							s = set(map(lambda s : s.strip().replace(' ', '_'), line[6:-1].split(',')))
+						if line.startswith("#id:"):
+							queries[-1].set_id(line[len("#id:"):-1])
+						elif line.startswith("#title:"):
+							queries[-1].set_title(line[len("#title:"):-1])
+						elif line.startswith("#comment:"):
+							queries[-1].add_comment(line[len("#comment:"):-1])
+						elif line.startswith("#tags:"):
+							s = set(map(lambda s : s.strip().replace(' ', '_'), line[len("#tags:"):-1].split(',')))
 							s.discard("")
 							queries[-1].add_tags(s)
 							break
@@ -206,14 +201,17 @@ if __name__ == "__main__":
 	tag_count = Query.count_queries_tags(queries)
 	ttag_count = Query.count_queries_tags(tqueries)
 	################ WRITE METADATAS ################
-	
 	import os
 
-	os.mkdir("./metadatas")
+	try:
+		os.mkdir("./metadatas")
+	except:
+		pass
+
 	for q in queries:
 		q.write_metadatas(f"./metadatas/{q.get_id()}.ttl")
 	
-	Query.write_allmetadatas("./allmetadatas.ttl")
+	Query.write_allmetadatas(queries, "./metadatas/allmetadatas.ttl")
 
 	##################### RECAP #####################
 
@@ -269,11 +267,8 @@ if __name__ == "__main__":
 
 	################## HEATMAP ######################
 
-	#TODO: Hierarchical clustering from appearance 
-	#TODO: Could normalize by dividing by self appearance in queries ( X /= tags["tag1"] * tags["tag2"] )
-
-	#TODO: Check Tutorial, QC, ...
-	matrix, matrixtags = Query.appearance_matrix()
+	#TODO: May normalize by dividing by self appearance in queries ? ( X /= tags["tag1"] * tags["tag2"] )
+	matrix, matrixtags = Query.appearance_matrix(queries)
 
 	m = plt.matshow(matrix)
 	m.axes.set_xticklabels(matrixtags, rotation = 90)
@@ -283,16 +278,16 @@ if __name__ == "__main__":
 	plt.gcf().canvas.manager.set_window_title("Matrice d'apparition")
 	plt.show()
 	
-	from math import log
-	#Logarithm approach to minimize high values (+1 for avoiding domain errors)
-	logmatrix = [list(map(lambda i: log(i + 1), l)) for l in matrix]
+	def hierarchical_clustering_dendrogram(matrix, tags, method="ward"):
+		dists = squareform(matrix)
+		linkage_matrix = linkage(dists, method, optimal_ordering=True)
+		dendrogram(linkage_matrix, labels=tags, orientation='left')
+		plt.title(f"{method.capitalize()} link")
+		plt.show()
 
-	logm = plt.matshow(logmatrix)
-	logm.axes.set_xticklabels(matrixtags, rotation = 90)
-	logm.axes.set_yticklabels(matrixtags)
-	logm.axes.set_xticks(range(len(matrixtags)))
-	logm.axes.set_yticks(range(len(matrixtags)))
-
-	plt.gcf().canvas.manager.set_window_title("Matrice d'apparition (log(x+1))")
-	plt.show()
-
+	#Dendrogram with no filters
+	hierarchical_clustering_dendrogram(matrix, matrixtags)
+	#Dendrogram with all queries and tags that are exclusive to tutorial queries
+	hierarchical_clustering_dendrogram(*Query.appearance_matrix(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(tqueries)) | {"tutorial"}))
+	#Dendrogram with tutorial queries and tags that are exclusive to tutorial queries
+	hierarchical_clustering_dendrogram(*Query.appearance_matrix(tqueries, remove={"tutorial"}))
