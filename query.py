@@ -291,3 +291,90 @@ if __name__ == "__main__":
 	hierarchical_clustering_dendrogram(*Query.appearance_matrix(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(tqueries)) | {"tutorial"}))
 	#Dendrogram with tutorial queries and tags that are exclusive to tutorial queries
 	hierarchical_clustering_dendrogram(*Query.appearance_matrix(tqueries, remove={"tutorial"}))
+
+	class Node:
+		def __init__(self, value=None, label="*", children=[]):
+			self.value = value
+			self.label = label
+			self.children = children[:]
+			self.calculate_value()
+		
+		def addChild(self, n):
+			self.children.append(n)
+			self.calculate_value()
+
+		def addChildren(self, ns):
+			self.children.extend(ns)
+			self.calculate_value()
+
+		def calculate_value(self):
+			if len(self.children) > 0:
+				self.value = [0]*len(self.children[0].value)
+				for n in self.children:
+					for i in range(len(self.value)):
+						self.value[i] += n.value[i]
+
+				for i in range(len(self.value)):
+					self.value[i] /= len(self.children)
+
+		def get_value(self):
+			return self.value
+
+		def get_children(self):
+			return self.children
+	
+		def get_label(self):
+			return self.label
+
+		def set_label(self, label):
+			self.label = label
+
+		def toDot(self):
+			g = f"\t\"{hex(id(self))}\"[label=\"{self.get_label()}\"]\n"
+			if self.get_label() == "*":
+				g += f"\t\"{hex(id(self))}\"[shape=point]\n"
+				
+			for e in self.get_children():
+				g += f"\t\"{hex(id(self))}\" -- \"{hex(id(e))}\"\n" + e.toDot()
+			return g
+
+	def agglomerate(matrix, matrixtags, output_filename):
+		def distance(vect1, vect2):
+			d = 0
+			for i in range(len(vect1)):
+				d += (vect1[i] - vect2[i]) ** 2
+			return d
+
+		acc = [Node(matrix[i][:], matrixtags[i]) for i in range(len(matrix))]
+
+		while len(acc) > 1:
+			dmin = { "dist": -1, "nodes": [] }
+			for i in range(len(acc)):
+				for j in range(i+1, len(acc)):
+					d = distance(acc[i].get_value(), acc[j].get_value())
+					if dmin["dist"] == -1 or d < dmin["dist"]:
+						dmin = { "dist": d, "nodes": [acc[i], acc[j]] }
+					elif d == dmin["dist"]:
+						for node in dmin["nodes"][1:]:
+							if distance(acc[j].get_value(), node.get_value()) != d:
+								break
+						else:
+							dmin["nodes"].append(acc[j])
+
+			n = Node()
+			n.addChildren(dmin["nodes"])
+			for node in dmin["nodes"]:
+				acc.remove(node)
+			acc.append(n)
+
+		with open(output_filename, "w", encoding="utf-8") as f:
+			f.write("graph {\n" + acc[0].toDot() + "\n}")	
+	
+	agglomerate(matrix, matrixtags, "tags.dot")
+	agglomerate(*Query.appearance_matrix(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(tqueries)) | {"tutorial"}), "tagse.dot")
+	agglomerate(*Query.appearance_matrix(tqueries, remove={"tutorial"}), "ttags.dot")
+			
+
+
+		
+

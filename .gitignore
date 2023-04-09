@@ -131,4 +131,6 @@ dmypy.json
 #Custom
 *.gexf
 *.ttl
+*.dot
+*.png
 metadatas
