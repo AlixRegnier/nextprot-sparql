@@ -123,7 +123,7 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 					r[t] = 1
 		return r
 	
-	def appearance_matrix(queries, remove=set()):
+	def appearance_matrix(queries, remove=set(), applylog=True):
 		"""
 		Parameters
 		----------
@@ -161,6 +161,13 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 					if lt[i] in indices and lt[j] in indices:
 						matrix[indices[lt[i]]][indices[lt[j]]] += 1
 						matrix[indices[lt[j]]][indices[lt[i]]] += 1
+		
+		#Logarithm normalize a bit datas
+		if applylog:
+			from math import log
+			for i in range(len(matrix)):
+				for j in range(i+1, len(matrix)):
+					matrix[i][j] = matrix[j][i] = log(matrix[i][j]+1)
 
 		return matrix, l
 	
@@ -302,14 +309,12 @@ if __name__ == "__main__":
 
 	#TODO: May normalize by dividing by self appearance in queries ? ( X /= tags["tag1"] * tags["tag2"] )
 	matrix, matrixtags = Query.appearance_matrix(queries)
-
 	m = plt.matshow(matrix)
-	
 	m.axes.set_xticklabels(matrixtags, rotation = 90)
 	m.axes.set_yticklabels(matrixtags)
 	m.axes.set_xticks(range(len(matrixtags)))
 	m.axes.set_yticks(range(len(matrixtags)))
-	plt.gcf().canvas.manager.set_window_title("Matrice d'apparition")
+	plt.gcf().canvas.manager.set_window_title("Matrice d'apparition (log(x+1)")
 	plt.gcf().set_size_inches(11,13)
 	#plt.get_current_fig_manager().full_screen_toggle()
 	plt.savefig("./output/heatmap.png")
