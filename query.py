@@ -263,7 +263,7 @@ if __name__ == "__main__":
 	except:
 		pass
 
-	figure = plt.figure()
+	figure = plt.figure(figsize=(15,8.5))
 	grid = figure.add_gridspec(2,3)
 	#Nb requete/tag
 	a1 = figure.add_subplot(grid[0,0])
@@ -304,11 +304,15 @@ if __name__ == "__main__":
 	matrix, matrixtags = Query.appearance_matrix(queries)
 
 	m = plt.matshow(matrix)
+	
 	m.axes.set_xticklabels(matrixtags, rotation = 90)
 	m.axes.set_yticklabels(matrixtags)
 	m.axes.set_xticks(range(len(matrixtags)))
 	m.axes.set_yticks(range(len(matrixtags)))
 	plt.gcf().canvas.manager.set_window_title("Matrice d'apparition")
+	plt.gcf().set_size_inches(11,13)
+	#plt.get_current_fig_manager().full_screen_toggle()
+	plt.savefig("./output/heatmap.png")
 	plt.show()
 	
 	def hierarchical_clustering_dendrogram(matrix, tags, title="", method="ward", save=True, output_filename="dendrogram.png"):
@@ -316,6 +320,7 @@ if __name__ == "__main__":
 		linkage_matrix = linkage(dists, method, optimal_ordering=True)
 		dendrogram(linkage_matrix, labels=tags, orientation='left')
 		plt.gcf().canvas.manager.set_window_title("Hierarchial clustering dendrogram from appearance matrix")
+		plt.gcf().set_size_inches(15,10)
 		plt.title(f"{title} ({method} linkage)")
 		plt.savefig(output_filename)
 		plt.show()
@@ -331,6 +336,8 @@ if __name__ == "__main__":
 	#Dendrogram with tutorial queries and tags that are exclusive to tutorial queries
 	hierarchical_clustering_dendrogram(*Query.appearance_matrix(tqueries, remove={"tutorial"}), "Tutorial queries; without 'tutorial' tag", output_filename="./output/dendrogram_tutoqueries_alltags.png")
 
+	################# CUSTOM CAH ####################
+	
 	class Node:
 		def __init__(self, value=None, label="*", children=[]):
 			self.value = value
@@ -409,6 +416,7 @@ if __name__ == "__main__":
 			f.write("graph {\n" + acc[0].toDot() + "\n}")	
 	
 	#Create most possible couple of tags then link them with fictional nodes
+	#Ref: WPGMA
 	def agglomerate2(matrix, matrixtags, output_filename):
 		def distance(vect1, vect2):
 			d = 0
