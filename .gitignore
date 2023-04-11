@@ -134,3 +134,4 @@ dmypy.json
 *.dot
 *.png
 metadatas
+output

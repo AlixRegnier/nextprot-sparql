@@ -197,9 +197,12 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 if __name__ == "__main__":
 	queries = Query.get_queries_from_directory("./nextprot-queries")
 	tqueries = Query.filter_queries(queries, include={"tutorial"})
+	qcqueries = Query.filter_queries(queries, include={"QC"})
 
 	tag_count = Query.count_queries_tags(queries)
 	ttag_count = Query.count_queries_tags(tqueries)
+	qctag_count = Query.count_queries_tags(qcqueries)
+
 	################ WRITE METADATAS ################
 	import os
 
@@ -225,11 +228,21 @@ if __name__ == "__main__":
 	for e in ttag_count:
 		if len(e) > max_ttag_len:
 			max_ttag_len = len(e)
+
+	max_qctag_len = 0
+	for e in qctag_count:
+		if len(e) > max_qctag_len:
+			max_qctag_len = len(e)
 	
 	#Count tags appearance
 	print("\n#NUMBER OF TAGS#".ljust(max_tag_len+1),":", len(tag_count))
 	for n, t in sorted(((v,k) for k,v in tag_count.items()), reverse=True):
 		print(t.ljust(max_tag_len),":", n)
+
+	#Count tags QC appearance
+	print("\n#NUMBER OF QC TAGS#".ljust(max_qctag_len+1),":", len(qctag_count))
+	for n, t in sorted(((v,k) for k,v in qctag_count.items()), reverse=True):
+		print(t.ljust(max_qctag_len),":", n)
 	
 	#Count tags appearance in tutorial tags
 	print("\n#NUMBER OF TUTORIAL TAGS#".ljust(max_ttag_len+1),":", len(ttag_count)-1)
@@ -237,32 +250,52 @@ if __name__ == "__main__":
 		if t != "tutorial":
 			print(t.ljust(max_ttag_len),":", n)
 
+	print("\nTags that aren't in qc queries:")
+	print(tag_count.keys() - qctag_count.keys(), end="\n\n")
+
 	print("\nTags that aren't in tutorial queries:")
 	print(tag_count.keys() - ttag_count.keys(), end="\n\n")
 
 	################# HISTOGRAMS ####################
 
+	try:
+		os.mkdir("./output")
+	except:
+		pass
+
 	figure = plt.figure()
+	grid = figure.add_gridspec(2,3)
 	#Nb requete/tag
-	a1 = figure.add_subplot(221)
+	a1 = figure.add_subplot(grid[0,0])
 	a1.hist(tag_count.values())
 	a1.set_title("Nombre de requêtes par tag")
 
 	#Nb tag/requete
-	a2 = figure.add_subplot(222)
+	a2 = figure.add_subplot(grid[1,0])
 	a2.hist([q.get_tag_length() for q in queries])
 	a2.set_title("Nombre de tags par requête")
 
+	#Nb requete/tag (QC)
+	a3 = figure.add_subplot(grid[0,1])
+	a3.hist(qctag_count.values())
+	a3.set_title("Nombre de requêtes par tag (QC)")
+
+	#Nb tag/requete (QC)
+	a4 = figure.add_subplot(grid[1,1])
+	a4.hist([q.get_tag_length() for q in qcqueries])
+	a4.set_title("Nombre de tags par requête (QC)")
+	
 	#Nb requete/tag (tutorial)
-	a3 = figure.add_subplot(223)
-	a3.hist(ttag_count.values())
-	a3.set_title("Nombre de requêtes par tag (tutorial)")
+	a5 = figure.add_subplot(grid[0,2])
+	a5.hist(ttag_count.values())
+	a5.set_title("Nombre de requêtes par tag (tutorial)")
 
 	#Nb tag/requete (tutorial)
-	a4 = figure.add_subplot(224)
-	a4.hist([q.get_tag_length() for q in tqueries])
-	a4.set_title("Nombre de tags par requête (tutorial)")
-
+	a6 = figure.add_subplot(grid[1,2])
+	a6.hist([q.get_tag_length() for q in tqueries])
+	a6.set_title("Nombre de tags par requête (tutorial)")
+	
+	plt.savefig("./output/histograms.png")
 	plt.show()
 
 	################## HEATMAP ######################
@@ -278,19 +311,25 @@ if __name__ == "__main__":
 	plt.gcf().canvas.manager.set_window_title("Matrice d'apparition")
 	plt.show()
 	
-	def hierarchical_clustering_dendrogram(matrix, tags, method="ward"):
+	def hierarchical_clustering_dendrogram(matrix, tags, title="", method="ward", save=True, output_filename="dendrogram.png"):
 		dists = squareform(matrix)
 		linkage_matrix = linkage(dists, method, optimal_ordering=True)
 		dendrogram(linkage_matrix, labels=tags, orientation='left')
-		plt.title(f"{method.capitalize()} link")
+		plt.gcf().canvas.manager.set_window_title("Hierarchial clustering dendrogram from appearance matrix")
+		plt.title(f"{title} ({method} linkage)")
+		plt.savefig(output_filename)
 		plt.show()
 
 	#Dendrogram with no filters
-	hierarchical_clustering_dendrogram(matrix, matrixtags)
+	hierarchical_clustering_dendrogram(matrix, matrixtags, "All queries; all tags", output_filename="./output/dendrogram_allqueries_alltags.png")
+	#Dendrogram with all queries and tags that are exclusive to qc queries
+	hierarchical_clustering_dendrogram(*Query.appearance_matrix(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(qcqueries)) | {"QC"}), "All queries; only tags that are exclusive to QC queries", output_filename="./output/dendrogram_allqueries_qctags.png")
+	#Dendrogram with qc queries and tags that are exclusive to qc queries
+	hierarchical_clustering_dendrogram(*Query.appearance_matrix(qcqueries, remove={"QC"}), "QC queries; without 'QC' tag", output_filename="./output/dendrogram_qcqueries_alltags.png")
 	#Dendrogram with all queries and tags that are exclusive to tutorial queries
-	hierarchical_clustering_dendrogram(*Query.appearance_matrix(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(tqueries)) | {"tutorial"}))
+	hierarchical_clustering_dendrogram(*Query.appearance_matrix(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(tqueries)) | {"tutorial"}), "All queries; only tags that are exclusive to tutorial queries", output_filename="./output/dendrogram_allqueries_tutotags.png")
 	#Dendrogram with tutorial queries and tags that are exclusive to tutorial queries
-	hierarchical_clustering_dendrogram(*Query.appearance_matrix(tqueries, remove={"tutorial"}))
+	hierarchical_clustering_dendrogram(*Query.appearance_matrix(tqueries, remove={"tutorial"}), "Tutorial queries; without 'tutorial' tag", output_filename="./output/dendrogram_tutoqueries_alltags.png")
 
 	class Node:
 		def __init__(self, value=None, label="*", children=[]):
@@ -304,7 +343,7 @@ if __name__ == "__main__":
 			self.calculate_value()
 
 		def addChildren(self, ns):
-			self.children.extend(ns)
+			self.children.extend(list(ns))
 			self.calculate_value()
 
 		def calculate_value(self):
@@ -338,7 +377,7 @@ if __name__ == "__main__":
 				g += f"\t\"{hex(id(self))}\" -- \"{hex(id(e))}\"\n" + e.toDot()
 			return g
 
-	def agglomerate(matrix, matrixtags, output_filename):
+	def agglomerate1(matrix, matrixtags, output_filename):
 		def distance(vect1, vect2):
 			d = 0
 			for i in range(len(vect1)):
@@ -348,18 +387,17 @@ if __name__ == "__main__":
 		acc = [Node(matrix[i][:], matrixtags[i]) for i in range(len(matrix))]
 
 		while len(acc) > 1:
-			dmin = { "dist": -1, "nodes": [] }
+			dmin = { "dist": -1, "nodes": set() }
 			for i in range(len(acc)):
 				for j in range(i+1, len(acc)):
 					d = distance(acc[i].get_value(), acc[j].get_value())
 					if dmin["dist"] == -1 or d < dmin["dist"]:
-						dmin = { "dist": d, "nodes": [acc[i], acc[j]] }
+						dmin = { "dist": d, "nodes": { acc[i], acc[j] } }
 					elif d == dmin["dist"]:
-						for node in dmin["nodes"][1:]:
-							if distance(acc[j].get_value(), node.get_value()) != d:
+						for node in dmin["nodes"]:
+							if distance(acc[j].get_value(), node.get_value()) == d:
+								dmin["nodes"].add(acc[j])
 								break
-						else:
-							dmin["nodes"].append(acc[j])
 
 			n = Node()
 			n.addChildren(dmin["nodes"])
@@ -370,11 +408,65 @@ if __name__ == "__main__":
 		with open(output_filename, "w", encoding="utf-8") as f:
 			f.write("graph {\n" + acc[0].toDot() + "\n}")	
 	
-	agglomerate(matrix, matrixtags, "tags.dot")
-	agglomerate(*Query.appearance_matrix(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(tqueries)) | {"tutorial"}), "tagse.dot")
-	agglomerate(*Query.appearance_matrix(tqueries, remove={"tutorial"}), "ttags.dot")
+	#Create most possible couple of tags then link them with fictional nodes
+	def agglomerate2(matrix, matrixtags, output_filename):
+		def distance(vect1, vect2):
+			d = 0
+			for i in range(len(vect1)):
+				d += (vect1[i] - vect2[i]) ** 2
+			return d
+
+		acc = [Node(matrix[i][:], matrixtags[i]) for i in range(len(matrix))]
+
+		sn = []
+		finalize = False
+		while len(acc) > 1:
+			dmin = { "dist": -1, "nodes": set() }
+			for i in range(len(acc)):
+				for j in range(i+1, len(acc)):
+					d = distance(acc[i].get_value(), acc[j].get_value())
+					if dmin["dist"] == -1 or d < dmin["dist"]:
+						dmin = { "dist": d, "nodes": { acc[i], acc[j] } }
+					elif d == dmin["dist"]:
+						for node in dmin["nodes"]:
+							if distance(acc[j].get_value(), node.get_value()) <= d and node != acc[j]:
+								dmin["nodes"].add(acc[j])
+								break
+
+			n = Node()
+			n.addChildren(dmin["nodes"])
+			for node in dmin["nodes"]:
+				acc.remove(node)	
+
+			if len(acc) <= 1 and not finalize:
+				finalize = True
+				acc.extend(sn)
+				sn.clear()
+
+			if finalize:
+				acc.append(n)
+			else:
+				sn.append(n)
+
+
+		with open(output_filename, "w", encoding="utf-8") as f:
+			f.write("graph {\n" + acc[0].toDot() + "\n}")	
+
+	#TODO: Agglomerate without creating any chimeric nodes
+	def agglomerate3(matrix, matrixtags, output_filename):
+		pass
+
+	#1 Chimeric nodes at each steps
+	agglomerate1(matrix, matrixtags, "./output/allqueries_alltags.1.dot")
+	agglomerate1(*Query.appearance_matrix(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(qcqueries)) | {"QC"}), "./output/allqueries_qctags.1.dot")
+	agglomerate1(*Query.appearance_matrix(qcqueries, remove={"QC"}), "./output/qcqueries_alltags.1.dot")
+	agglomerate1(*Query.appearance_matrix(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(tqueries)) | {"tutorial"}), "./output/allqueries_tutotags.1.dot")
+	agglomerate1(*Query.appearance_matrix(tqueries, remove={"tutorial"}), "./output/tutoqueries_alltags.1.dot")
+
+	#2 Most possible couples --> chimeric nodes
+	agglomerate2(matrix, matrixtags, "./output/allqueries_alltags.2.dot")
+	agglomerate2(*Query.appearance_matrix(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(qcqueries)) | {"QC"}), "./output/allqueries_qctags.2.dot")
+	agglomerate2(*Query.appearance_matrix(qcqueries, remove={"QC"}), "./output/qcqueries_alltags.2.dot")
+	agglomerate2(*Query.appearance_matrix(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(tqueries)) | {"tutorial"}), "./output/allqueries_tutotags.2.dot")
+	agglomerate2(*Query.appearance_matrix(tqueries, remove={"tutorial"}), "./output/tutoqueries_alltags.2.dot")
 			
-
-
-		
-
