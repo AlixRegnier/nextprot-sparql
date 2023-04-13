@@ -22,3 +22,18 @@ with open("counts.txt", "w") as f:
     for _, t in sorted(((v,k) for k,v in tag_count.items()), reverse=True):
         f.write(f"{t.replace('_', ' ')} & {dget(tag_count, t)} & {dget(qctag_count, t)} & {dget(ttag_count, t)}\\\\\n")
 """
+
+
+#Only one query tagged "Evidence" without "QC" tag
+#tq = Query.filter_queries(queries, include={"evidence"}, exclude={"QC"})
+
+#Bunch of queries that are quite interesting --> snorql-only
+#tq = Query.filter_queries(queries, exclude={"QC", "tutorial"})
+
+#Another subset of queries
+#tq = Query.filter_queries(queries, exclude={"QC", "tutorial", "snorql-only", "federated_query"})
+"""
+print(len(tq))
+for q in tq:
+    print(q)
+"""

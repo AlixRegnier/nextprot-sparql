@@ -171,7 +171,7 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 
 		return matrix, l
 
-	def ascending_hierarchical_classification(queries, remove=set(), ponderate=True):
+	def hierarchical_agglomerative_clustering(queries, remove=set(), ponderate=True):
 		all_tags = Query.get_queries_tags(queries) - remove
 		tag_occurency = Query.count_queries_tags(queries)
 		l = sorted(list(all_tags))
@@ -367,7 +367,7 @@ if __name__ == "__main__":
 
 	################## HEATMAP ######################
 
-	matrix, matrixtags = Query.ascending_hierarchical_classification(queries) #Query.appearance_matrix(queries, applylog=True)
+	matrix, matrixtags = Query.hierarchical_agglomerative_clustering(queries) #Query.appearance_matrix(queries, applylog=True)
 	m = plt.matshow(matrix)
 	m.axes.set_xticklabels(Query.get_queries_id(queries), rotation = 90)
 	m.axes.set_yticklabels(matrixtags)
@@ -528,17 +528,17 @@ if __name__ == "__main__":
 	
 	#1 Chimeric nodes at each steps
 	agglomerate1(matrix, matrixtags, "./output/allqueries_alltags.1.dot")
-	agglomerate1(*Query.ascending_hierarchical_classification(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(qcqueries)) | {"QC"}), "./output/allqueries_qctags.1.dot")
-	agglomerate1(*Query.ascending_hierarchical_classification(qcqueries, remove={"QC"}), "./output/qcqueries_alltags.1.dot")
-	agglomerate1(*Query.ascending_hierarchical_classification(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(tqueries)) | {"tutorial"}), "./output/allqueries_tutotags.1.dot")
-	agglomerate1(*Query.ascending_hierarchical_classification(tqueries, remove={"tutorial"}), "./output/tutoqueries_alltags.1.dot")
+	agglomerate1(*Query.hierarchical_agglomerative_clustering(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(qcqueries)) | {"QC"}), "./output/allqueries_qctags.1.dot")
+	agglomerate1(*Query.hierarchical_agglomerative_clustering(qcqueries, remove={"QC"}), "./output/qcqueries_alltags.1.dot")
+	agglomerate1(*Query.hierarchical_agglomerative_clustering(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(tqueries)) | {"tutorial"}), "./output/allqueries_tutotags.1.dot")
+	agglomerate1(*Query.hierarchical_agglomerative_clustering(tqueries, remove={"tutorial"}), "./output/tutoqueries_alltags.1.dot")
 
 	#2 Most possible couples --> chimeric nodes
 	agglomerate2(matrix, matrixtags, "./output/allqueries_alltags.2.dot")
-	agglomerate2(*Query.ascending_hierarchical_classification(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(qcqueries)) | {"QC"}), "./output/allqueries_qctags.2.dot")
-	agglomerate2(*Query.ascending_hierarchical_classification(qcqueries, remove={"QC"}), "./output/qcqueries_alltags.2.dot")
-	agglomerate2(*Query.ascending_hierarchical_classification(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(tqueries)) | {"tutorial"}), "./output/allqueries_tutotags.2.dot")
-	agglomerate2(*Query.ascending_hierarchical_classification(tqueries, remove={"tutorial"}), "./output/tutoqueries_alltags.2.dot")
+	agglomerate2(*Query.hierarchical_agglomerative_clustering(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(qcqueries)) | {"QC"}), "./output/allqueries_qctags.2.dot")
+	agglomerate2(*Query.hierarchical_agglomerative_clustering(qcqueries, remove={"QC"}), "./output/qcqueries_alltags.2.dot")
+	agglomerate2(*Query.hierarchical_agglomerative_clustering(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(tqueries)) | {"tutorial"}), "./output/allqueries_tutotags.2.dot")
+	agglomerate2(*Query.hierarchical_agglomerative_clustering(tqueries, remove={"tutorial"}), "./output/tutoqueries_alltags.2.dot")
 
 	#3 No chimeric nodes
 	#TODO: Maybe
