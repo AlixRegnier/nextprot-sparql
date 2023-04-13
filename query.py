@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 from scipy.cluster.hierarchy import dendrogram, linkage
-from scipy.spatial.distance import squareform
+from scipy.spatial.distance import pdist
 
 class Query:
 	def __init__(self, id=None, title="unknown", tags=set()):
@@ -86,7 +86,6 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 		except IOError:
 			print(f"ERROR: Failed to write '{output_filename}'")
 
-
 	def __str__(self):
 		return f"Id:\t{self.id}\nTitle:\t{self.title}\nTags:\t{self.tags}\n"
 
@@ -123,7 +122,13 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 					r[t] = 1
 		return r
 	
-	def appearance_matrix(queries, remove=set(), applylog=True):
+	def get_queries_id(queries):
+		r = [""]*len(queries)
+		for i in range(len(queries)):
+			r[i] = queries[i].id
+		return r
+	
+	def appearance_matrix(queries, remove=set(), applylog=False):
 		"""
 		Parameters
 		----------
@@ -139,13 +144,8 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 		[0] Matrix of appearance
 		[1] List, tag order
 		"""
-		all_tags = set()
-		
-		for q in queries:
-			all_tags |= q.tags
-
-		#Remove unwanted tags
-		all_tags -= remove
+		#Get all tags and remove unwanted tags
+		all_tags = Query.get_queries_tags(queries) - remove
 
 		#Sort set to always get the same result (see: hash function)
 		l = sorted(list(all_tags))
@@ -170,8 +170,27 @@ PREFIX : <http://nextprot.org/query/>\n\n""")
 					matrix[i][j] = matrix[j][i] = log(matrix[i][j]+1)
 
 		return matrix, l
-	
 
+	def ascending_hierarchical_classification(queries, remove=set(), ponderate=True):
+		all_tags = Query.get_queries_tags(queries) - remove
+		tag_occurency = Query.count_queries_tags(queries)
+		l = sorted(list(all_tags))
+
+		# x: queries
+		# y: tags
+		matrix = [[0]*len(queries) for _ in range(len(all_tags))]
+
+		indices = { l[i] : i for i in range(len(l)) }
+		for i in range(len(queries)):
+			for t in queries[i].tags:
+				if t in indices:
+					if ponderate:
+						matrix[indices[t]][i] = 1 / tag_occurency[t]
+					else:
+						matrix[indices[t]][i] = 1
+
+		return matrix, l
+	
 	def get_queries_from_directory(path=".", prefix="NXQ_", suffix=".rq", start=1, end=9702):
 		path = path.rstrip('/')
 		queries = []
@@ -210,6 +229,20 @@ if __name__ == "__main__":
 	ttag_count = Query.count_queries_tags(tqueries)
 	qctag_count = Query.count_queries_tags(qcqueries)
 
+
+	#Only one query tagged "Evidence" without "QC" tag
+	#tq = Query.filter_queries(queries, include={"evidence"}, exclude={"QC"})
+
+	#Bunch of queries that are quite interesting --> snorql-only
+	#tq = Query.filter_queries(queries, exclude={"QC", "tutorial"})
+
+	#Another subset of queries
+	#tq = Query.filter_queries(queries, exclude={"QC", "tutorial", "snorql-only", "federated_query"})
+	"""
+	print(len(tq))
+	for q in tq:
+		print(q)
+	"""
 	################ WRITE METADATAS ################
 	import os
 
@@ -263,65 +296,91 @@ if __name__ == "__main__":
 	print("\nTags that aren't in tutorial queries:")
 	print(tag_count.keys() - ttag_count.keys(), end="\n\n")
 
-	################# HISTOGRAMS ####################
-
 	try:
 		os.mkdir("./output")
 	except:
 		pass
 
-	figure = plt.figure(figsize=(15,8.5))
+	############## BAR & HISTOGRAMS #################
+
+	def hist2bar(xs):
+		c = dict()
+		for x in xs:
+			if x in c:
+				c[x] += 1
+			else:
+				c[x] = 1
+		return list(c.keys()), list(c.values())
+	
+	figure = plt.figure(figsize=(17,11))
 	grid = figure.add_gridspec(2,3)
-	#Nb requete/tag
+	#Histogramme du nb de requêtes annotées pour chaque tag
 	a1 = figure.add_subplot(grid[0,0])
 	a1.hist(tag_count.values())
-	a1.set_title("Nombre de requêtes par tag")
+	a1.set_xlabel("requêtes")
+	a1.set_ylabel("tags")
+	a1.set_title("a) Nombre de requêtes par tag")
 
-	#Nb tag/requete
+	#Barplot du nb de tags qui annotent une requête
 	a2 = figure.add_subplot(grid[1,0])
-	a2.hist([q.get_tag_length() for q in queries])
-	a2.set_title("Nombre de tags par requête")
+	values, count = hist2bar([q.get_tag_length() for q in queries])
+	a2.bar(values, count)
+	a2.set_xticks(range(min(values), max(values)+1))
+	a2.set_xlabel("tags")
+	a2.set_ylabel("requêtes")
+	a2.set_title("d) Nombre de tags par requête")
 
-	#Nb requete/tag (QC)
+	#Histogramme du nb de requêtes annotées pour chaque tag (QC)
 	a3 = figure.add_subplot(grid[0,1])
 	a3.hist(qctag_count.values())
-	a3.set_title("Nombre de requêtes par tag (QC)")
+	a3.set_xlabel("requêtes")
+	a3.set_ylabel("tags")
+	a3.set_title("b) Nombre de requêtes par tag (QC)")
 
-	#Nb tag/requete (QC)
+	#Barplot du nb de tags qui annotent une requête (QC)
 	a4 = figure.add_subplot(grid[1,1])
-	a4.hist([q.get_tag_length() for q in qcqueries])
-	a4.set_title("Nombre de tags par requête (QC)")
+	values, count = hist2bar([q.get_tag_length() for q in qcqueries])
+	a4.bar(values, count)
+	a4.set_xticks(range(min(values), max(values)+1))
+	a4.set_xlabel("tags")
+	a4.set_ylabel("requêtes")
+	a4.set_title("e) Nombre de tags par requête (QC)")
 	
-	#Nb requete/tag (tutorial)
+	#Histogramme du nb de requêtes annotées pour chaque tag (tutorial)
 	a5 = figure.add_subplot(grid[0,2])
 	a5.hist(ttag_count.values())
-	a5.set_title("Nombre de requêtes par tag (tutorial)")
+	a5.set_xlabel("requêtes")
+	a5.set_ylabel("tags")
+	a5.set_title("c) Nombre de requêtes par tag (tutorial)")
 
-	#Nb tag/requete (tutorial)
+	#Barplot du nb de tags qui annotent une requête (tutorial)
 	a6 = figure.add_subplot(grid[1,2])
-	a6.hist([q.get_tag_length() for q in tqueries])
-	a6.set_title("Nombre de tags par requête (tutorial)")
-	
+	values, count = hist2bar([q.get_tag_length() for q in tqueries])
+	a6.bar(values, count)
+	a6.set_xticks(range(min(values), max(values)+1))
+	a6.set_xlabel("tags")
+	a6.set_ylabel("requêtes")
+	a6.set_title("f) Nombre de tags par requête (tutorial)")
+
 	plt.savefig("./output/histograms.png")
 	plt.show()
 
 	################## HEATMAP ######################
 
-	#TODO: May normalize by dividing by self appearance in queries ? ( X /= tags["tag1"] * tags["tag2"] )
-	matrix, matrixtags = Query.appearance_matrix(queries)
+	matrix, matrixtags = Query.ascending_hierarchical_classification(queries) #Query.appearance_matrix(queries, applylog=True)
 	m = plt.matshow(matrix)
-	m.axes.set_xticklabels(matrixtags, rotation = 90)
+	m.axes.set_xticklabels(Query.get_queries_id(queries), rotation = 90)
 	m.axes.set_yticklabels(matrixtags)
-	m.axes.set_xticks(range(len(matrixtags)))
+	m.axes.set_xticks(range(len(queries)))
 	m.axes.set_yticks(range(len(matrixtags)))
-	plt.gcf().canvas.manager.set_window_title("Matrice d'apparition (log(x+1)")
+	plt.gcf().canvas.manager.set_window_title("Query/Tag")
 	plt.gcf().set_size_inches(11,13)
 	#plt.get_current_fig_manager().full_screen_toggle()
 	plt.savefig("./output/heatmap.png")
 	plt.show()
 	
 	def hierarchical_clustering_dendrogram(matrix, tags, title="", method="ward", save=True, output_filename="dendrogram.png"):
-		dists = squareform(matrix)
+		dists = pdist(matrix)
 		linkage_matrix = linkage(dists, method, optimal_ordering=True)
 		dendrogram(linkage_matrix, labels=tags, orientation='left')
 		plt.gcf().canvas.manager.set_window_title("Hierarchial clustering dendrogram from appearance matrix")
@@ -333,13 +392,13 @@ if __name__ == "__main__":
 	#Dendrogram with no filters
 	hierarchical_clustering_dendrogram(matrix, matrixtags, "All queries; all tags", output_filename="./output/dendrogram_allqueries_alltags.png")
 	#Dendrogram with all queries and tags that are exclusive to qc queries
-	hierarchical_clustering_dendrogram(*Query.appearance_matrix(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(qcqueries)) | {"QC"}), "All queries; only tags that are exclusive to QC queries", output_filename="./output/dendrogram_allqueries_qctags.png")
+	hierarchical_clustering_dendrogram(*Query.ascending_hierarchical_classification(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(qcqueries)) | {"QC"}), "All queries; only tags that are exclusive to QC queries", output_filename="./output/dendrogram_allqueries_qctags.png")
 	#Dendrogram with qc queries and tags that are exclusive to qc queries
-	hierarchical_clustering_dendrogram(*Query.appearance_matrix(qcqueries, remove={"QC"}), "QC queries; without 'QC' tag", output_filename="./output/dendrogram_qcqueries_alltags.png")
+	hierarchical_clustering_dendrogram(*Query.ascending_hierarchical_classification(qcqueries, remove={"QC"}), "QC queries; without 'QC' tag", output_filename="./output/dendrogram_qcqueries_alltags.png")
 	#Dendrogram with all queries and tags that are exclusive to tutorial queries
-	hierarchical_clustering_dendrogram(*Query.appearance_matrix(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(tqueries)) | {"tutorial"}), "All queries; only tags that are exclusive to tutorial queries", output_filename="./output/dendrogram_allqueries_tutotags.png")
+	hierarchical_clustering_dendrogram(*Query.ascending_hierarchical_classification(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(tqueries)) | {"tutorial"}), "All queries; only tags that are exclusive to tutorial queries", output_filename="./output/dendrogram_allqueries_tutotags.png")
 	#Dendrogram with tutorial queries and tags that are exclusive to tutorial queries
-	hierarchical_clustering_dendrogram(*Query.appearance_matrix(tqueries, remove={"tutorial"}), "Tutorial queries; without 'tutorial' tag", output_filename="./output/dendrogram_tutoqueries_alltags.png")
+	hierarchical_clustering_dendrogram(*Query.ascending_hierarchical_classification(tqueries, remove={"tutorial"}), "Tutorial queries; without 'tutorial' tag", output_filename="./output/dendrogram_tutoqueries_alltags.png")
 
 	################# CUSTOM CAH ####################
 	
@@ -348,15 +407,12 @@ if __name__ == "__main__":
 			self.value = value
 			self.label = label
 			self.children = children[:]
-			self.calculate_value()
 		
 		def addChild(self, n):
 			self.children.append(n)
-			self.calculate_value()
 
 		def addChildren(self, ns):
 			self.children.extend(list(ns))
-			self.calculate_value()
 
 		def calculate_value(self):
 			if len(self.children) > 0:
@@ -380,13 +436,15 @@ if __name__ == "__main__":
 		def set_label(self, label):
 			self.label = label
 
-		def toDot(self):
+		def toDot(self, through_children=True):
 			g = f"\t\"{hex(id(self))}\"[label=\"{self.get_label()}\"]\n"
 			if self.get_label() == "*":
 				g += f"\t\"{hex(id(self))}\"[shape=point]\n"
 				
 			for e in self.get_children():
-				g += f"\t\"{hex(id(self))}\" -- \"{hex(id(e))}\"\n" + e.toDot()
+				g += f"\t\"{hex(id(self))}\" -- \"{hex(id(e))}\"\n"
+				if through_children:
+					g += e.toDot()
 			return g
 
 	def agglomerate1(matrix, matrixtags, output_filename):
@@ -413,6 +471,8 @@ if __name__ == "__main__":
 
 			n = Node()
 			n.addChildren(dmin["nodes"])
+			n.calculate_value()
+
 			for node in dmin["nodes"]:
 				acc.remove(node)
 			acc.append(n)
@@ -448,6 +508,7 @@ if __name__ == "__main__":
 
 			n = Node()
 			n.addChildren(dmin["nodes"])
+			n.calculate_value()
 			for node in dmin["nodes"]:
 				acc.remove(node)	
 
@@ -464,22 +525,23 @@ if __name__ == "__main__":
 
 		with open(output_filename, "w", encoding="utf-8") as f:
 			f.write("graph {\n" + acc[0].toDot() + "\n}")	
-
-	#TODO: Agglomerate without creating any chimeric nodes
-	def agglomerate3(matrix, matrixtags, output_filename):
-		pass
-
+	
 	#1 Chimeric nodes at each steps
 	agglomerate1(matrix, matrixtags, "./output/allqueries_alltags.1.dot")
-	agglomerate1(*Query.appearance_matrix(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(qcqueries)) | {"QC"}), "./output/allqueries_qctags.1.dot")
-	agglomerate1(*Query.appearance_matrix(qcqueries, remove={"QC"}), "./output/qcqueries_alltags.1.dot")
-	agglomerate1(*Query.appearance_matrix(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(tqueries)) | {"tutorial"}), "./output/allqueries_tutotags.1.dot")
-	agglomerate1(*Query.appearance_matrix(tqueries, remove={"tutorial"}), "./output/tutoqueries_alltags.1.dot")
+	agglomerate1(*Query.ascending_hierarchical_classification(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(qcqueries)) | {"QC"}), "./output/allqueries_qctags.1.dot")
+	agglomerate1(*Query.ascending_hierarchical_classification(qcqueries, remove={"QC"}), "./output/qcqueries_alltags.1.dot")
+	agglomerate1(*Query.ascending_hierarchical_classification(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(tqueries)) | {"tutorial"}), "./output/allqueries_tutotags.1.dot")
+	agglomerate1(*Query.ascending_hierarchical_classification(tqueries, remove={"tutorial"}), "./output/tutoqueries_alltags.1.dot")
 
 	#2 Most possible couples --> chimeric nodes
 	agglomerate2(matrix, matrixtags, "./output/allqueries_alltags.2.dot")
-	agglomerate2(*Query.appearance_matrix(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(qcqueries)) | {"QC"}), "./output/allqueries_qctags.2.dot")
-	agglomerate2(*Query.appearance_matrix(qcqueries, remove={"QC"}), "./output/qcqueries_alltags.2.dot")
-	agglomerate2(*Query.appearance_matrix(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(tqueries)) | {"tutorial"}), "./output/allqueries_tutotags.2.dot")
-	agglomerate2(*Query.appearance_matrix(tqueries, remove={"tutorial"}), "./output/tutoqueries_alltags.2.dot")
+	agglomerate2(*Query.ascending_hierarchical_classification(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(qcqueries)) | {"QC"}), "./output/allqueries_qctags.2.dot")
+	agglomerate2(*Query.ascending_hierarchical_classification(qcqueries, remove={"QC"}), "./output/qcqueries_alltags.2.dot")
+	agglomerate2(*Query.ascending_hierarchical_classification(queries, remove=(Query.get_queries_tags(queries) - Query.get_queries_tags(tqueries)) | {"tutorial"}), "./output/allqueries_tutotags.2.dot")
+	agglomerate2(*Query.ascending_hierarchical_classification(tqueries, remove={"tutorial"}), "./output/tutoqueries_alltags.2.dot")
+
+	#3 No chimeric nodes
+	#TODO: Maybe
+	#agglomerate3(matrix, matrixtags, "./output/allqueries_alltags.3.dot")
+
 			
