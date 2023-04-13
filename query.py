@@ -351,19 +351,35 @@ if __name__ == "__main__":
 	plt.savefig("./output/histograms.png")
 	plt.show()
 
-	################## HEATMAP ######################
+	############ HEATMAP TAG PAIRWISE ###############
 
-	matrix, matrixtags = Query.hierarchical_agglomerative_clustering(queries) #Query.appearance_matrix(queries, applylog=True)
+	matrix, matrixtags = Query.appearance_matrix(queries, applylog=True)
+	m = plt.matshow(matrix)
+	m.axes.set_xticklabels(matrixtags, rotation = 90)
+	m.axes.set_yticklabels(matrixtags)
+	m.axes.set_xticks(range(len(matrixtags)))
+	m.axes.set_yticks(range(len(matrixtags)))
+	plt.gcf().canvas.manager.set_window_title("Query/Tag")
+	plt.gcf().set_size_inches(11,13)
+	plt.savefig("./output/heatmaptag.png")
+	plt.show()
+
+	################## HEATMAP ######################
+	
+	#TODO: Normalize ponderations
+	matrix, matrixtags = Query.hierarchical_agglomerative_clustering(queries, ponderate=False)
 	m = plt.matshow(matrix)
 	m.axes.set_xticklabels(Query.get_queries_id(queries), rotation = 90)
 	m.axes.set_yticklabels(matrixtags)
 	m.axes.set_xticks(range(len(queries)))
 	m.axes.set_yticks(range(len(matrixtags)))
 	plt.gcf().canvas.manager.set_window_title("Query/Tag")
-	plt.gcf().set_size_inches(11,13)
-	plt.savefig("./output/heatmap.png")
+	plt.gcf().set_size_inches(11,20)
+	plt.savefig("./output/heatmapcah.png")
 	plt.show()
-	
+
+	#################################################
+
 	def hierarchical_clustering_dendrogram(matrix, tags, title="", method="ward", save=True, output_filename="dendrogram.png"):
 		dists = pdist(matrix)
 		linkage_matrix = linkage(dists, method, optimal_ordering=True)
