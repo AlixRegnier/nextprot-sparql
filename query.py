@@ -229,20 +229,6 @@ if __name__ == "__main__":
 	ttag_count = Query.count_queries_tags(tqueries)
 	qctag_count = Query.count_queries_tags(qcqueries)
 
-
-	#Only one query tagged "Evidence" without "QC" tag
-	#tq = Query.filter_queries(queries, include={"evidence"}, exclude={"QC"})
-
-	#Bunch of queries that are quite interesting --> snorql-only
-	#tq = Query.filter_queries(queries, exclude={"QC", "tutorial"})
-
-	#Another subset of queries
-	#tq = Query.filter_queries(queries, exclude={"QC", "tutorial", "snorql-only", "federated_query"})
-	"""
-	print(len(tq))
-	for q in tq:
-		print(q)
-	"""
 	################ WRITE METADATAS ################
 	import os
 
@@ -375,7 +361,6 @@ if __name__ == "__main__":
 	m.axes.set_yticks(range(len(matrixtags)))
 	plt.gcf().canvas.manager.set_window_title("Query/Tag")
 	plt.gcf().set_size_inches(11,13)
-	#plt.get_current_fig_manager().full_screen_toggle()
 	plt.savefig("./output/heatmap.png")
 	plt.show()
 	
